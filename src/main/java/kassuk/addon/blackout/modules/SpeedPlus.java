@@ -2,6 +2,7 @@ package kassuk.addon.blackout.modules;
 
 import kassuk.addon.blackout.BlackOut;
 import kassuk.addon.blackout.BlackOutModule;
+import kassuk.addon.blackout.modules.SpeedPlus.SpeedMode;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
@@ -146,7 +147,7 @@ public class SpeedPlus extends BlackOutModule {
     @EventHandler
     private void onKB(PacketEvent.Receive event) {
         if (mc.player != null && mc.world != null) {
-            if (knockBack.get() && event.packet instanceof EntityVelocityUpdateS2CPacket packet && packet.getId() == mc.player.getId()) {
+            if (knockBack.get() && event.packet instanceof EntityVelocityUpdateS2CPacket packet && packet.getEntityId() == mc.player.getId()) {
                 double x = packet.getVelocityX() / 8000f;
                 double z = packet.getVelocityZ() / 8000f;
                 velocity = Math.max(velocity, Math.sqrt(x * x + z * z) * kbFactor.get());

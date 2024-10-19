@@ -5,6 +5,7 @@ https://github.com/MeteorDevelopment/meteor-client/blob/master/src/main/java/met
 
 package kassuk.addon.blackout.utils.meteor;
 
+import kassuk.addon.blackout.utils.EnchantmentUtils;
 import kassuk.addon.blackout.utils.SettingUtils;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
@@ -26,7 +27,8 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtList;
+import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.*;
@@ -38,6 +40,7 @@ import net.minecraft.world.RaycastContext;
 import net.minecraft.world.explosion.Explosion;
 
 import java.util.Objects;
+import java.util.Set;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
@@ -79,7 +82,7 @@ public class BODamageUtils {
         double damage = ((impact * impact + impact) / 2 * 7 * (6 * 2) + 1);
 
         damage = getDamageForDifficulty(damage);
-        damage = DamageUtil.getDamageLeft((float) damage, (float) player.getArmor(), (float) player.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
+        damage = DamageUtil.getDamageLeft(player, (float) damage, player.getDamageSources().explosion(explosion),  (float) player.getArmor(), (float) player.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
         damage = resistanceReduction(player, damage);
 
         ((IExplosion) explosion).set(crystal, 6, false);
@@ -144,21 +147,16 @@ public class BODamageUtils {
         int r = 0;
         if (!stack.isEmpty()) {
 
-            NbtList nbttaglist = stack.getEnchantments();
+            Set<RegistryEntry<Enchantment>> enchantList = stack.getEnchantments().getEnchantments();
 
-            for (int i = 0; i < nbttaglist.size(); ++i)
+            for (RegistryEntry<Enchantment> entry : enchantList)
             {
-                int j = nbttaglist.getCompound(i).getShort("id");
-                int k = nbttaglist.getCompound(i).getShort("lvl") + 1;
-                Enchantment e = Enchantment.byRawId(j);
-
-
-                if (e != null)
+                if (entry != null)
                 {
-                    if (e == Enchantments.BLAST_PROTECTION) {
-                        r += k * 2;
-                    } else if (e == Enchantments.PROTECTION) {
-                        r += k;
+                    if (entry == Enchantments.BLAST_PROTECTION) {
+                        r += EnchantmentUtils.getLevel(Enchantments.BLAST_PROTECTION, stack) * 2;
+                    } else if (entry == Enchantments.PROTECTION) {
+                        r += EnchantmentUtils.getLevel(Enchantments.PROTECTION, stack);
                     }
                 }
             }
@@ -191,10 +189,10 @@ public class BODamageUtils {
             }
             damage *= 1.5;
         }
-
+        //TODO check both
         if (stack.getEnchantments() != null) {
-            if (EnchantmentHelper.get(stack).containsKey(Enchantments.SHARPNESS)) {
-                int level = EnchantmentHelper.getLevel(Enchantments.SHARPNESS, stack);
+            if (EnchantmentHelper.getEnchantments(stack).getEnchantments().contains(Enchantments.SHARPNESS)) {
+                int level = EnchantmentUtils.getLevel(Enchantments.SHARPNESS, stack);
                 damage += (0.5 * level) + 0.5;
             }
         }
@@ -208,7 +206,7 @@ public class BODamageUtils {
         damage = resistanceReduction(target, damage);
 
         // Reduce by armour
-        damage = DamageUtil.getDamageLeft((float) damage, (float) target.getArmor(), (float) target.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
+        damage = DamageUtil.getDamageLeft(player, (float) damage, target.getDamageSources().playerAttack(player), (float) target.getArmor(), (float) target.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
 
         // Reduce by enchants
         damage = normalProtReduction(target, damage);
@@ -236,7 +234,7 @@ public class BODamageUtils {
         damage = resistanceReduction(player, damage);
 
         // Reduce by armour
-        damage = DamageUtil.getDamageLeft((float) damage, (float) player.getArmor(), (float) player.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
+        damage = DamageUtil.getDamageLeft(player, (float) damage, player.getDamageSources().badRespawnPoint(bed), (float) player.getArmor(), (float) player.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
 
         // Reduce by enchants
         ((IExplosion) explosion).set(bed, 5, true);
@@ -262,16 +260,16 @@ public class BODamageUtils {
         };
     }
 
-    private static double normalProtReduction(Entity player, double damage) {
-        int protLevel = EnchantmentHelper.getProtectionAmount(player.getArmorItems(), mc.world.getDamageSources().generic());
+    private static double normalProtReduction(LivingEntity player, double damage) {
+        float protLevel = EnchantmentHelper.getProtectionAmount((ServerWorld) mc.player.getWorld(), player, mc.world.getDamageSources().generic());
         if (protLevel > 20) protLevel = 20;
 
         damage *= 1 - (protLevel / 25.0);
         return damage < 0 ? 0 : damage;
     }
 
-    private static double blastProtReduction(Entity player, double damage, Explosion explosion) {
-        int protLevel = EnchantmentHelper.getProtectionAmount(player.getArmorItems(), mc.world.getDamageSources().explosion(explosion));
+    private static double blastProtReduction(LivingEntity player, double damage, Explosion explosion) {
+        float protLevel = EnchantmentHelper.getProtectionAmount((ServerWorld) mc.player.getWorld(), player, mc.world.getDamageSources().explosion(explosion));
         if (protLevel > 20) protLevel = 20;
 
         damage *= (1 - (protLevel / 25.0));
